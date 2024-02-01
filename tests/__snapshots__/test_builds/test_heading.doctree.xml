@@ -1,0 +1,10 @@
+<document source="<source>">
+    <section ids="test" names="test">
+        <title>
+            Test
+    <section ids="same-level" names="same\ level">
+        <title>
+            Same level
+        <section ids="different-level" names="different\ level">
+            <title>
+                Different level

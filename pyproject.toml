@@ -1,0 +1,43 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "sphinx_jinja2"
+dynamic = ["version", "description"]
+authors = [{name = "Chris Sewell", email = "chrisj_sewell@hotmail.com"}]
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Sphinx :: Extension",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+keywords = ["sphinx", "extension", "jinja"]
+requires-python = ">=3.8"
+dependencies = ["sphinx", "jinja2>=2.11"]
+
+[project.urls]
+Homepage = "https://github.com/sphinx-extensions2/sphinx-jinja2"
+Documentation = "https://sphinx-jinja2.readthedocs.io/"
+
+[project.optional-dependencies]
+testing = ["pytest", "syrupy", "pytest-cov", "coverage[toml]"]
+"docs" = ["furo"]
+
+[tool.ruff]
+line-length = 100
+extend-select = ["B0", "C4", "I", "ICN", "ISC", "N", "RUF", "SIM", "UP"]
+extend-ignore = ["ISC001", "RUF009"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+
+[tool.mypy]
+strict = true
+show_error_codes = true
+
+[tool.coverage.run]
+omit = ["*/_private.py"]

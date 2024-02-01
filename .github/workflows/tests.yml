@@ -1,0 +1,102 @@
+name: continuous-integration
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+  pull_request:
+
+jobs:
+
+  pytest:
+
+    name: Unit tests (python=${{matrix.python}}, sphinx${{matrix.sphinx}})
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.8", "3.11"]
+        sphinx: ["", "~=7.0", "~=6.0", "~=5.0"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{matrix.python}}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install sphinx${{matrix.sphinx}} -e ".[testing]"
+    - name: Run sphinx-build
+      run: pytest --cov=src --cov-report=xml --cov-report=term-missing
+
+  docs-html:
+
+    name: Build docs (sphinx${{matrix.sphinx}})
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        sphinx: ["", "~=7.0", "~=5.0"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.8
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install sphinx${{matrix.sphinx}} -e ".[docs]"
+    - name: Run sphinx-build
+      run: sphinx-build -nW --keep-going -b html docs/ docs/_build/html
+
+  check:
+    # https://github.com/marketplace/actions/alls-green#why
+    # This job does nothing and is only used for the branch protection
+
+    if: always()
+
+    needs:
+    - pytest
+    - docs-html
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Decide whether the needed jobs succeeded or failed
+      uses: re-actors/alls-green@release/v1
+      with:
+        jobs: ${{ toJSON(needs) }}
+
+
+  publish:
+
+    name: Publish to PyPI
+    needs:
+    - check
+    if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v4
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.8"
+    - name: install flit
+      run: |
+        pip install flit~=3.4
+    - name: Build and publish
+      run: |
+        flit publish
+      env:
+        FLIT_USERNAME: __token__
+        FLIT_PASSWORD: ${{ secrets.PYPI_KEY }}
