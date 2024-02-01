@@ -134,9 +134,9 @@ Warning messages
 
 Warning messages are displayed in the Sphinx build output, for problematic inputs, these all have the type ``jinja2``, which can be used to `suppress them in the Sphinx configuration <https://www.sphinx-doc.org/en/master/usage/configuration.html#confval-suppress_warnings>`__:
 
-```python
-suppress_warnings = ["jinja2"]
-```
+.. code-block:: python
+
+    suppress_warnings = ["jinja2"]
 
 Since is difficult / impossible to map the source line numbers, from the template to the Jinja rendered content,
 problems with the parsing of the rendered content always refer to the first line number either of the ``jinja`` directive, or the template file (when using the ``file`` option).
