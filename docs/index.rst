@@ -141,6 +141,38 @@ Warning messages are displayed in the Sphinx build output, for problematic input
 Since is difficult / impossible to map the source line numbers, from the template to the Jinja rendered content,
 problems with the parsing of the rendered content always refer to the first line number either of the ``jinja`` directive, or the template file (when using the ``file`` option).
 
+Known issues
+-------------
+
+* [#3](https://github.com/sphinx-extensions2/sphinx-jinja2/issues/3): template output is fed back into the RST parser. When the source uses `MyST parser <https://myst-parser.readthedocs.io/en/latest/index.html>`__, this will trigger an error::
+
+       Directive 'jinja' cannot be mocked: MockingError: MockStateMachine has not yet implemented 'insert_input'.
+
+
+   The workaround is to wrap the `jinja` directive inside `rst-eval`
+
+   .. code-block:: rst
+
+      ```{rst-eval}
+      .. jinja::
+         :ctx: {"foo":"bar"}
+
+         Baz.
+      ```
+
+   rather than using it directly:
+
+   .. code-block:: markdown
+
+      ```{jinja}
+      :ctx: {"foo":"bar"}
+
+      Baz.
+      ```
+
+
+
+
 Configuration
 -------------
 
