@@ -97,6 +97,7 @@ class JinjaDirective(SphinxDirective):
         "file": directives.path,
         "ctx": directives.unchanged,
         "debug": directives.flag,
+        "raw": directives.unchanged,
     }
     options: JinjaOptions
     arguments: list[str]
@@ -187,12 +188,17 @@ class JinjaDirective(SphinxDirective):
             _warn(f"Error rendering jinja template: {exc.__class__.__name__}: {exc}")
             return []
 
-        # insert the new content into the source stream
-        # setting the source and line number
-        new_lines = StringList(
-            new_content.splitlines(), items=[(source, line - 1) for _ in new_content.splitlines()]
-        )
-        self.state_machine.insert_input(new_lines, source)
+        if not 'raw' in self.options:
+            # insert the new content into the source stream
+            # setting the source and line number
+            new_lines = StringList(
+                new_content.splitlines(), items=[(source, line - 1) for _ in new_content.splitlines()]
+            )
+            self.state_machine.insert_input(new_lines, source)
+        else:
+            raw_node = nodes.raw('', new_content, classes='jinja-rendered', format=self.options['raw'])
+            (raw_node.source, raw_node.line) = self.state_machine.get_source_and_line(self.lineno)
+            return [raw_node]
 
         if conf.debug or "debug" in self.options:
             # return the rendered template
