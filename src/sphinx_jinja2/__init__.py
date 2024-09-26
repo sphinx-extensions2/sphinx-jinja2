@@ -200,7 +200,7 @@ class JinjaDirective(SphinxDirective):
             self.state_machine.insert_input(new_lines, source)
         else:
             raw_node = nodes.raw(
-                "", new_content, classes=["jinja-rendered"], format=self.options["raw"]
+                "", new_content, classes=[], format=self.options["raw"]
             )
             (raw_node.source, raw_node.line) = self.state_machine.get_source_and_line(self.lineno)
             return [raw_node]
