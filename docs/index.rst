@@ -129,6 +129,22 @@ To see the rendered templates in the built documentation, use the ``debug`` opti
 
         Hallo **{{ name }}**!
 
+
+
+Raw output
+**********
+
+The role can be used to produce raw ouput instead of interpreted RST:
+
+.. jinja2-example::
+
+      .. jinja::
+          :ctx: {"name": "World"}
+          :raw: html
+
+          Hello <em>{{ name }}</em>
+
+
 Warning messages
 ****************
 
