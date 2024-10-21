@@ -1,4 +1,5 @@
 """A sphinx extension for peeking at internal references."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
