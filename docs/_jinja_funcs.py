@@ -1,0 +1,6 @@
+"""Example jinja filters/tests for the documentation."""
+
+
+def is_big(value):
+    """Test if a value is bigger than 100."""
+    return value > 100

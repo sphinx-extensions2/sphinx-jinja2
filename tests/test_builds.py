@@ -237,7 +237,7 @@ def test_missing_variable(tmp_path: Path):
     )
     result = run_sphinxbuild(tmp_path, clear_build=False)
     assert (
-        "index.rst:3: WARNING: Error rendering jinja template: UndefinedError: 'a' is undefined"
+        "index.rst:3: WARNING: Error rendering jinja template: UndefinedError: undefined value"
         in result.stderr
     )
 
@@ -342,6 +342,167 @@ def test_rebuild_on_file_change(tmp_path: Path, snapshot_doctree):
     assert not result.stderr
     (tmp_path / "template.jinja").write_text("hallo2")
     result = run_sphinxbuild(tmp_path, clear_build=False)
+    assert not result.stderr
+    assert result.doctree() == snapshot_doctree
+
+
+def test_filters_and_tests(tmp_path: Path, snapshot_doctree):
+    """Test that custom filters and tests can be added via the configuration.
+
+    Note, function objects cannot be cached by Sphinx (warning expected),
+    import strings (see following test) are preferred.
+    """
+    (tmp_path / "conf.py").write_text(
+        CONF_CONTENT
+        + "\njinja2_filters = {'double': lambda x: x * 2}"
+        + "\njinja2_tests = {'big': lambda x: x > 100}"
+    )
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+
+            {{ 2 | double }}{% if 200 is big %} is big{% endif %}
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    for stderr_line in result.stderr.splitlines():
+        assert "cannot cache unpickleable configuration value" in stderr_line
+    assert result.doctree() == snapshot_doctree
+
+
+def test_filters_and_tests_import_strings(tmp_path: Path, snapshot_doctree):
+    """Test that custom filters and tests can be given as import strings,
+    which (unlike function objects) are cacheable by Sphinx.
+    """
+    (tmp_path / "_funcs.py").write_text(
+        dedent(
+            """\
+        def double(x):
+            return x * 2
+
+        def big(x):
+            return x > 100
+        """
+        )
+    )
+    (tmp_path / "conf.py").write_text(
+        CONF_CONTENT
+        + "\nimport os, sys; sys.path.insert(0, os.path.dirname(__file__))"
+        + "\njinja2_filters = {'double': '_funcs:double'}"
+        + "\njinja2_tests = {'big': '_funcs.big'}"
+    )
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+
+            {{ 2 | double }}{% if 200 is big %} is big{% endif %}
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert not result.stderr
+    assert result.doctree() == snapshot_doctree
+
+
+def test_filters_bad_import_string(tmp_path: Path):
+    """Test that unresolvable import strings are reported as warnings."""
+    (tmp_path / "conf.py").write_text(CONF_CONTENT + "\njinja2_filters = {'double': 'not_a_mod'}")
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+
+            hallo
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert "index.rst:3: WARNING: Error adding filters: ImportError" in result.stderr
+
+
+def test_env_kwargs(tmp_path: Path, snapshot_doctree):
+    """Test that supported env_kwargs are passed to the environment,
+    and unsupported (jinja2 only) ones are reported as warnings.
+    """
+    (tmp_path / "conf.py").write_text(
+        CONF_CONTENT + "\njinja2_env_kwargs = {'trim_blocks': True, 'autoescape': True}"
+    )
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+
+            {% if true %}
+            hallo
+            {% endif %}
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert (
+        "index.rst:3: WARNING: Ignoring jinja2_env_kwargs not supported by minijinja.Environment:"
+        " 'autoescape' (use 'auto_escape_callback')" in result.stderr
+    )
+    assert result.doctree() == snapshot_doctree
+
+
+def test_raw(tmp_path: Path, snapshot_doctree):
+    """Test that the raw option outputs the rendered template as raw content."""
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+            :ctx: {"name": "World"}
+            :raw: html
+
+            Hello <em>{{ name }}</em>
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert not result.stderr
+    assert result.doctree() == snapshot_doctree
+
+
+def test_myst(tmp_path: Path, snapshot_doctree):
+    """Test that the directive works in MyST Markdown documents,
+    where the rendered content is parsed as MyST (see issue #3).
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT + "\nextensions.append('myst_parser')")
+    (tmp_path / "index.md").write_text(
+        dedent(
+            """\
+        # Test
+
+        ```{jinja}
+        :ctx: {"name": "World"}
+
+        Hello *{{ name }}*
+
+        ## Sub-heading
+
+        In section
+        ```
+
+        After directive
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
     assert not result.stderr
     assert result.doctree() == snapshot_doctree
 

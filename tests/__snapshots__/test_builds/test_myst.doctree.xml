@@ -1,0 +1,15 @@
+<document source="<source>">
+    <section ids="test" names="test">
+        <title>
+            Test
+        <paragraph>
+            Hello 
+            <emphasis>
+                World
+        <section ids="sub-heading" names="sub-heading">
+            <title>
+                Sub-heading
+            <paragraph>
+                In section
+            <paragraph>
+                After directive

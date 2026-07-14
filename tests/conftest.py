@@ -5,7 +5,7 @@ from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 
 class DoctreeSnapshotExtension(SingleFileSnapshotExtension):
     _write_mode = WriteMode.TEXT
-    _file_extension = "doctree.xml"
+    file_extension = "doctree.xml"
 
     def serialize(self, data, **kwargs):
         if not isinstance(data, document):

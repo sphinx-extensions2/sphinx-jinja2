@@ -1,4 +1,10 @@
+from pathlib import Path
+import sys
+
 from sphinx_jinja2 import __version__
+
+# allow _jinja_funcs.py (example filters/tests) to be importable
+sys.path.insert(0, str(Path(__file__).parent))
 
 project = "sphinx-jinja2"
 copyright = "Chris Sewell"
@@ -18,4 +24,4 @@ html_css_files = ["custom.css"]
 
 jinja2_contexts = {"ctx1": {"name": "World"}}
 # jinja2_debug = True
-jinja2_tests = {"is_big": lambda x: x > 100}
+jinja2_tests = {"is_big": "_jinja_funcs:is_big"}
