@@ -266,6 +266,10 @@ class JinjaDirective(SphinxDirective):
 
         # get the jinja template, from file or content
         source, line = self.get_source_info()
+        # get_source_info is typed as possibly None, but is always populated
+        # while a directive is being run (docutils just types it defensively)
+        assert source is not None
+        assert line is not None
         template_name = self.env.docname
         if template_filename := self.options.get("file"):
             if self.content:
