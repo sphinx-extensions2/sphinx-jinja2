@@ -3,7 +3,7 @@
         <title>
             Test
         <paragraph>
-            Hello 
+            Hello
             <emphasis>
                 World
         <section ids="sub-heading" names="sub-heading">
