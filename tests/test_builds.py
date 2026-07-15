@@ -389,7 +389,10 @@ def test_filters_and_tests(tmp_path: Path, snapshot_doctree):
     )
     result = run_sphinxbuild(tmp_path)
     for stderr_line in result.stderr.splitlines():
-        assert "cannot cache unpickleable configuration value" in stderr_line
+        # Sphinx >=7.3 warns that function objects cannot be cached;
+        # the exact spelling varies ("unpickable" on 7.4.x, "unpickleable" on >=8.0),
+        # and older Sphinx emits no such warning at all.
+        assert "cannot cache unpick" in stderr_line
     assert result.doctree() == snapshot_doctree
 
 
