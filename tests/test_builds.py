@@ -7,6 +7,7 @@ import subprocess
 from textwrap import dedent
 
 from docutils import nodes
+from sphinx import version_info as sphinx_version_info
 
 
 class BuildResult:
@@ -393,6 +394,10 @@ def test_filters_and_tests(tmp_path: Path, snapshot_doctree):
         # the exact spelling varies ("unpickable" on 7.4.x, "unpickleable" on >=8.0),
         # and older Sphinx emits no such warning at all.
         assert "cannot cache unpick" in stderr_line
+    if sphinx_version_info >= (7, 3):
+        # on supported Sphinx the warning must actually be present
+        # (guarding against it silently disappearing)
+        assert any("cannot cache unpick" in line for line in result.stderr.splitlines())
     assert result.doctree() == snapshot_doctree
 
 

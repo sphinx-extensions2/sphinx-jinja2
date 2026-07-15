@@ -92,6 +92,8 @@ jobs:
     permissions:
       # required for PyPI trusted publishing
       id-token: write
+      # for actions/checkout (explicit, since id-token drops other scopes to none)
+      contents: read
     steps:
     - name: Checkout source
       uses: actions/checkout@v6

@@ -24,6 +24,9 @@ __version__ = "0.1.0"
 
 LOGGER = logging.getLogger(__name__)
 
+_MISSING = object()
+"""Sentinel for an absent attribute (distinct from a present ``None``)."""
+
 
 def setup(app: Sphinx) -> dict[str, Any]:
     """Setup the sphinx extension."""
@@ -203,6 +206,10 @@ class JinjaDirective(SphinxDirective):
                 return []
             ctx.update(ctx_option)
 
+        if "raw" in self.options and not self.options["raw"]:
+            _warn("'raw' option requires an output format, e.g. ':raw: html'")
+            return []
+
         # create the minijinja environment,
         # loading referenced templates from the source directory,
         # and recording them, so they can be noted as dependencies of this document
@@ -225,6 +232,9 @@ class JinjaDirective(SphinxDirective):
                 return None
             loaded_templates.append(path)
             try:
+                # a UnicodeDecodeError (non-UTF-8 template) is deliberately left
+                # to propagate to the render-error handler, which reports it with
+                # context, rather than being masked here as "template not found"
                 return path.read_text("utf8")
             except OSError:
                 return None
@@ -304,9 +314,6 @@ class JinjaDirective(SphinxDirective):
 
         return_nodes: list[nodes.Node] = []
 
-        if "raw" in self.options and not self.options["raw"]:
-            _warn("'raw' option requires an output format, e.g. ':raw: html'")
-            return []
         if raw_format := self.options.get("raw"):
             # return the rendered template as raw (non-parsed) content
             raw_node = nodes.raw("", new_content, format=raw_format)
@@ -334,7 +341,7 @@ class JinjaDirective(SphinxDirective):
             document = self.state.document
             orig_source = document["source"]
             orig_reporter_source = renderer.reporter.source
-            orig_line_func = getattr(renderer.reporter, "get_source_and_line", None)
+            orig_line_func = getattr(renderer.reporter, "get_source_and_line", _MISSING)
             try:
                 document["source"] = source
                 renderer.reporter.source = source
@@ -343,7 +350,7 @@ class JinjaDirective(SphinxDirective):
             finally:
                 document["source"] = orig_source
                 renderer.reporter.source = orig_reporter_source
-                if orig_line_func is not None:
+                if orig_line_func is not _MISSING:
                     renderer.reporter.get_source_and_line = orig_line_func
                 else:
                     del renderer.reporter.get_source_and_line
