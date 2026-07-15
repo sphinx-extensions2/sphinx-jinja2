@@ -197,6 +197,25 @@ def test_missing_file(tmp_path: Path):
     assert "index.rst:3: WARNING: Error reading template file" in result.stderr
 
 
+def test_file_not_utf8(tmp_path: Path):
+    """Test that files that cannot be decoded as UTF-8 are reported as warnings."""
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "template.jinja").write_bytes(b"caf\xe9 {{ 1 + 1 }}")
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+            :file: template.jinja
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    print(result.stderr)
+    assert "index.rst:3: WARNING: Error reading template file" in result.stderr
+
+
 def test_ctx(tmp_path: Path, snapshot_doctree):
     """Test that the ctx option works, globally and locally,
     and that local takes precedence over global.
@@ -478,6 +497,26 @@ def test_raw(tmp_path: Path, snapshot_doctree):
     assert result.doctree() == snapshot_doctree
 
 
+def test_raw_no_format(tmp_path: Path):
+    """Test that a raw option with no format argument is reported as a warning."""
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+            :raw:
+
+            <b>{{ 1 + 1 }}</b>
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    print(result.stderr)
+    assert "index.rst:3: WARNING: 'raw' option requires an output format" in result.stderr
+
+
 def test_myst(tmp_path: Path, snapshot_doctree):
     """Test that the directive works in MyST Markdown documents,
     where the rendered content is parsed as MyST (see issue #3).
@@ -575,3 +614,45 @@ def test_template_inheritance(tmp_path: Path, snapshot_doctree):
     result = run_sphinxbuild(tmp_path, clear_build=False)
     assert not result.stderr
     assert result.doctree() == snapshot_doctree
+
+
+def test_include_outside_srcdir(tmp_path: Path):
+    """Test that templates outside the source directory cannot be loaded,
+    via absolute paths or parent-directory traversal
+    (a leading '/' is simply treated as relative to the source directory).
+    """
+    srcdir = tmp_path / "src"
+    srcdir.mkdir()
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOP_SECRET")
+    (srcdir / "conf.py").write_text(CONF_CONTENT)
+    (srcdir / "inside.jinja").write_text("in-srcdir")
+    (srcdir / "index.rst").write_text(
+        dedent(
+            f"""\
+        Test
+        ====
+        .. jinja::
+
+            {{% include "/inside.jinja" %}}
+
+        .. jinja::
+
+            {{% include "../secret.txt" %}}
+
+        .. jinja::
+
+            {{% include "{secret}" %}}
+
+        .. jinja::
+
+            {{% include "sub/../../secret.txt" %}}
+        """
+        )
+    )
+    result = run_sphinxbuild(srcdir)
+    print(result.stderr)
+    assert result.stderr.count("WARNING: Error rendering jinja template: TemplateNotFound") == 3
+    html = (result.build / "html" / "index.html").read_text()
+    assert "in-srcdir" in html
+    assert "TOP_SECRET" not in html

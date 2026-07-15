@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.0 (2026-07-14)
+## v0.1.0 (unreleased)
 
 ### ⬆️ Migration from Jinja2 to minijinja
 
@@ -19,8 +19,14 @@ Most templates should render identically, however, note the following difference
   (use `{% if var %}{{ var }}{% endif %}` guards if this matters).
 - A small number of Jinja2-only filters (e.g. `wordwrap`, `urlize`, `xmlattr`, `center`, `wordcount`)
   are not built in to minijinja; they can be re-added via `jinja2_filters` if required.
+- Custom filters and tests receive values as plain arguments;
+  Jinja2's `@pass_context`, `@pass_environment` and `@pass_eval_context` decorators
+  are not supported by minijinja (such filters fail when the template is rendered, with a warning).
 - Python methods on objects (e.g. `{{ "a,b".split(",") }}`) continue to work,
   via minijinja's [Python compatibility mode](https://github.com/mitsuhiko/minijinja/tree/main/minijinja-py#python-methods-on-objects).
+- Templates referenced by `{% include %}` / `{% extends %}` remain restricted
+  to files within the source directory
+  (absolute paths and `..` parent traversal are rejected, as previously).
 
 ### ✨ New features
 

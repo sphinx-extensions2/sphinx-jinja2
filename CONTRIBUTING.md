@@ -14,7 +14,6 @@
 ## Running the pre-commit hooks
 
 The pre-commit hooks are managed by [pre-commit](https://pre-commit.com/).
-To install them, run:
 
 To run the hooks on all files, install pre-commit and run:
 

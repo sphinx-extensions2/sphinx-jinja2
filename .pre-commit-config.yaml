@@ -5,7 +5,10 @@ repos:
   rev: v6.0.0
   hooks:
   - id: trailing-whitespace
+    # snapshots may contain meaningful whitespace
+    exclude: ^tests/__snapshots__/
   - id: end-of-file-fixer
+    exclude: ^tests/__snapshots__/
   - id: check-toml
   - id: check-yaml
 

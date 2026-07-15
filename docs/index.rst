@@ -78,6 +78,8 @@ If these files change then Sphinx will re-build pages that use them!
 Templates can include or extend other templates.
 Referenced templates are always relative to the source directory,
 and Sphinx will also correctly re-build pages that use them.
+Templates can never be loaded from outside the source directory
+(absolute paths and ``..`` parent traversal are rejected).
 
 .. jinja2-example::
     :template: Hallo {{ name }}!
@@ -184,8 +186,10 @@ Warning messages are displayed in the Sphinx build output, for problematic input
 
     suppress_warnings = ["jinja2"]
 
-Since it is difficult / impossible to map the source line numbers, from the template to the Jinja rendered content,
-problems with the parsing of the rendered content always refer to the first line number either of the ``jinja`` directive, or the template file (when using the ``file`` option).
+Since it is difficult / impossible to map the source line numbers, from the template to the Jinja rendered content:
+
+- In reStructuredText documents, problems with the parsing of the rendered content always refer to the first line number either of the ``jinja`` directive, or the template file (when using the ``file`` option).
+- In MyST Markdown documents, they refer to a line number within the rendered content, offset from the ``jinja`` directive (and with myst-parser >=5, they are always attributed to the document containing the directive, rather than the template file).
 
 Migration from Jinja2
 ---------------------
@@ -203,6 +207,9 @@ Most templates will render identically, but note the following differences:
   (use ``{% if var %}{{ var }}{% endif %}`` guards if this matters).
 - A small number of Jinja2-only filters (e.g. ``wordwrap``, ``urlize``, ``xmlattr``, ``center``, ``wordcount``)
   are not built in to minijinja; they can be re-added via ``jinja2_filters`` if required.
+- Custom filters and tests receive values as plain arguments;
+  Jinja2's ``@pass_context``, ``@pass_environment`` and ``@pass_eval_context`` decorators
+  are not supported by minijinja (such filters fail when the template is rendered, with a warning).
 - Python methods on objects (e.g. ``{{ "a,b".split(",") }}``) continue to work,
   via minijinja's `Python compatibility mode <https://github.com/mitsuhiko/minijinja/tree/main/minijinja-py#python-methods-on-objects>`__.
 

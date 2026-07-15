@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, fields
 import importlib
 import json
+import os
 from pathlib import Path
 from typing import Any, ClassVar, TypedDict
 
@@ -98,6 +99,7 @@ _ENVIRONMENT_KWARGS = frozenset(
         "line_comment_prefix",
         "line_statement_prefix",
         "lstrip_blocks",
+        "path_join_callback",
         "pycompat",
         "trim_blocks",
         "undefined_behavior",
@@ -208,8 +210,18 @@ class JinjaDirective(SphinxDirective):
         loaded_templates: list[Path] = []
 
         def _load_template(name: str) -> str | None:
-            path = template_base / name
-            if not path.is_file():
+            # never load templates from outside the source directory,
+            # mirroring jinja2.FileSystemLoader:
+            # a leading '/' is treated as relative to the source directory,
+            # while '..' parent traversal is rejected
+            parts: list[str] = []
+            for part in name.split("/"):
+                if os.sep in part or (os.altsep and os.altsep in part) or part == os.pardir:
+                    return None
+                if part and part != ".":
+                    parts.append(part)
+            path = template_base.joinpath(*parts)
+            if not path.is_relative_to(template_base) or not path.is_file():
                 return None
             loaded_templates.append(path)
             try:
@@ -264,7 +276,7 @@ class JinjaDirective(SphinxDirective):
             try:
                 with open(source, encoding="utf8") as f:
                     content = f.read()
-            except OSError as exc:
+            except (OSError, UnicodeDecodeError) as exc:
                 _warn(f"Error reading template file {source}: {exc}")
                 return []
             self.env.note_dependency(source)
@@ -288,6 +300,9 @@ class JinjaDirective(SphinxDirective):
 
         return_nodes: list[nodes.Node] = []
 
+        if "raw" in self.options and not self.options["raw"]:
+            _warn("'raw' option requires an output format, e.g. ':raw: html'")
+            return []
         if raw_format := self.options.get("raw"):
             # return the rendered template as raw (non-parsed) content
             raw_node = nodes.raw("", new_content, format=raw_format)
@@ -309,7 +324,9 @@ class JinjaDirective(SphinxDirective):
             # in the same manner as its own include directive
             # (note the content is parsed as MyST Markdown, not RST).
             # We temporarily point the document/reporter at the template source,
-            # so that any warnings/errors are correctly attributed.
+            # so that warnings/errors are attributed to it where possible;
+            # this works with myst-parser 4.x, but myst-parser >=5 logs warnings
+            # against the docname, i.e. the document containing the directive.
             document = self.state.document
             orig_source = document["source"]
             orig_reporter_source = renderer.reporter.source
