@@ -1,4 +1,5 @@
 """Private module for sphinx-jinja2."""
+
 from __future__ import annotations
 
 from dataclasses import fields

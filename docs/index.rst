@@ -1,7 +1,8 @@
 sphinx-jinja2
 =============
 
-    A sphinx extension to add the ``jinja`` directive, for rendering `jinja <https://jinja.palletsprojects.com/en/3.1.x/>`__ templates.
+    A sphinx extension to add the ``jinja`` directive, for rendering `Jinja <https://jinja.palletsprojects.com>`__ templates
+    (powered by `minijinja <https://github.com/mitsuhiko/minijinja>`__).
 
 .. note::
 
@@ -77,6 +78,8 @@ If these files change then Sphinx will re-build pages that use them!
 Templates can include or extend other templates.
 Referenced templates are always relative to the source directory,
 and Sphinx will also correctly re-build pages that use them.
+Templates can never be loaded from outside the source directory
+(absolute paths and ``..`` parent traversal are rejected).
 
 .. jinja2-example::
     :template: Hallo {{ name }}!
@@ -116,6 +119,51 @@ If you need a generic template containing a heading, then perhaps use a context 
 
         Content
 
+Custom filters and tests
+************************
+
+Custom `filters <https://docs.rs/minijinja/latest/minijinja/filters/index.html>`__ and `tests <https://docs.rs/minijinja/latest/minijinja/tests/index.html>`__ can be added to the environment,
+using the ``jinja2_filters`` and ``jinja2_tests`` configuration options.
+These map names to Python functions, or import strings of the form ``"module.path:func_name"``.
+Import strings are preferred, since Sphinx cannot cache function objects, meaning that full re-builds are always triggered.
+
+.. jinja2-example::
+    :conf: jinja2_tests = {"is_big": "my_module:is_big"}
+
+    .. jinja::
+        :ctx: {"number": 200}
+
+        {% if number is is_big %}{{ number }} is big!{% endif %}
+
+Raw output
+**********
+
+By default, the rendered template is parsed as source input,
+to instead output it as raw content of a given `format <https://docutils.sourceforge.io/docs/ref/rst/directives.html#raw-data-pass-through>`__,
+use the ``raw`` option:
+
+.. jinja2-example::
+
+    .. jinja::
+        :ctx: {"name": "World"}
+        :raw: html
+
+        Hello <em>{{ name }}</em>!
+
+MyST Markdown documents
+***********************
+
+The ``jinja`` directive can also be used within `MyST Markdown <https://myst-parser.readthedocs.io>`__ documents,
+in which case the rendered template is parsed as MyST Markdown:
+
+.. code-block:: markdown
+
+    ```{jinja}
+    :ctx: {"name": "World"}
+
+    Hello *{{ name }}*!
+    ```
+
 Debugging
 *********
 
@@ -138,8 +186,32 @@ Warning messages are displayed in the Sphinx build output, for problematic input
 
     suppress_warnings = ["jinja2"]
 
-Since is difficult / impossible to map the source line numbers, from the template to the Jinja rendered content,
-problems with the parsing of the rendered content always refer to the first line number either of the ``jinja`` directive, or the template file (when using the ``file`` option).
+Since it is difficult / impossible to map the source line numbers, from the template to the Jinja rendered content:
+
+- In reStructuredText documents, problems with the parsing of the rendered content always refer to the first line number either of the ``jinja`` directive, or the template file (when using the ``file`` option).
+- In MyST Markdown documents, they refer to a line number within the rendered content, offset from the ``jinja`` directive (and with myst-parser >=5, they are always attributed to the document containing the directive, rather than the template file).
+
+Migration from Jinja2
+---------------------
+
+Since v0.1.0, templates are rendered using `minijinja <https://github.com/mitsuhiko/minijinja>`__,
+a modern re-implementation of the Jinja template engine, rather than `Jinja2 <https://jinja.palletsprojects.com>`__.
+Most templates will render identically, but note the following differences:
+
+- ``jinja2_env_kwargs`` are now passed to `minijinja.Environment <https://github.com/mitsuhiko/minijinja/tree/main/minijinja-py>`__.
+  Common keyword arguments (``trim_blocks``, ``lstrip_blocks``, ``keep_trailing_newline``, custom delimiters, ...) are unchanged;
+  Jinja2-only arguments are ignored, with a warning.
+- Undefined variables raise errors (as previously, with ``StrictUndefined``),
+  but this can now be relaxed with ``jinja2_env_kwargs = {"undefined_behavior": "lenient"}``.
+- ``None`` values are rendered as ``none`` rather than ``None``
+  (use ``{% if var %}{{ var }}{% endif %}`` guards if this matters).
+- A small number of Jinja2-only filters (e.g. ``wordwrap``, ``urlize``, ``xmlattr``, ``center``, ``wordcount``)
+  are not built in to minijinja; they can be re-added via ``jinja2_filters`` if required.
+- Custom filters and tests receive values as plain arguments;
+  Jinja2's ``@pass_context``, ``@pass_environment`` and ``@pass_eval_context`` decorators
+  are not supported by minijinja (such filters fail when the template is rendered, with a warning).
+- Python methods on objects (e.g. ``{{ "a,b".split(",") }}``) continue to work,
+  via minijinja's `Python compatibility mode <https://github.com/mitsuhiko/minijinja/tree/main/minijinja-py#python-methods-on-objects>`__.
 
 Configuration
 -------------
