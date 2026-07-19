@@ -42,9 +42,31 @@ Most templates should render identically, however, note the following difference
   This is now the recommended usage, since function objects cannot be cached by Sphinx,
   and so always trigger full re-builds.
 
+### 🐛 Fixes
+
+- Template files (loaded via `:file:` or `{% include %}`) that begin with a UTF-8
+  byte-order mark are now decoded correctly (the BOM is stripped, rather than
+  injected into the rendered output).
+- The `raw` option's format is now normalized (lower-cased and whitespace-collapsed),
+  so e.g. `:raw: HTML` is recognized by docutils writers rather than silently
+  dropping the content; an empty format is also validated before rendering.
+- Warnings now carry a subtype (`jinja2.config`, `jinja2.template` or `jinja2.render`),
+  for granular control via `suppress_warnings`, and the warning-type tag is no longer
+  duplicated in the message text on Sphinx >=8 (nor, on Sphinx <8, appended to it at all;
+  suppression via the warning type/subtype is unaffected on all versions).
+- Rendering errors in inline templates are now reported at the actual failing line in
+  the document (rather than the directive's first line); errors in template files include
+  the position within the file, and the `debug` option / `jinja2_debug` now includes
+  minijinja's code-frame in the error message.
+- A misconfigured non-dict `jinja2_contexts` now emits a warning, instead of aborting the
+  whole build with an unhandled error.
+- Overriding the reserved `env` context key now emits a warning (the override is still
+  applied).
+
 ### 🧰 Maintenance
 
 - Support Python 3.11-3.14, Sphinx 7.2-9.x
+- Use `env.srcdir` instead of the deprecated `env.app.srcdir` (avoids a `RemovedInSphinx11Warning`)
 - PEP 639 license expression in packaging metadata
 - PyPI trusted publishing (OIDC) in CI
 - Updated CI actions, pre-commit hooks, Read the Docs config

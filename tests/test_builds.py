@@ -284,10 +284,15 @@ def test_missing_variable(tmp_path: Path):
         )
     )
     result = run_sphinxbuild(tmp_path, clear_build=False)
+    # the error is reported at the actual failing document line (fix 4):
+    # the directive is on line 3, but the failing content ``{{ a }}`` is the
+    # first content line, i.e. document line 5 (content_offset 4 + template line 1)
     assert (
-        "index.rst:3: WARNING: Error rendering jinja template: UndefinedError: undefined value"
+        "index.rst:5: WARNING: Error rendering jinja template: UndefinedError: undefined value"
         in result.stderr
     )
+    # minijinja's own " (in index:N)" position suffix is stripped for inline errors
+    assert "(in " not in result.stderr
 
 
 def test_missing_context(tmp_path: Path):
@@ -584,6 +589,44 @@ def test_myst(tmp_path: Path, snapshot_doctree):
     assert result.doctree() == snapshot_doctree
 
 
+def test_myst_render_error_location(tmp_path: Path):
+    """A render error in a MyST ``{jinja}`` fence is attributed to the
+    directive's line, not a bogus ``content_offset``-derived line (fix 4).
+
+    Under myst-parser's MockState, ``content_offset`` is a fixed internal
+    value (not document-relative), so the inline line-offset math must be gated
+    on a real docutils state machine and otherwise fall back to the directive.
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT + "\nextensions.append('myst_parser')")
+    # the fence is pushed well down the document (content above it) so that a
+    # bogus content_offset-derived line would land far from the real location
+    (tmp_path / "index.md").write_text(
+        dedent(
+            """\
+        # Heading
+
+        First paragraph of content.
+
+        Second paragraph of content.
+
+        Third paragraph here.
+
+        ```{jinja}
+
+        {{ undefined_variable }}
+        ```
+
+        After.
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    # the ``{jinja}`` fence opens on document line 9
+    assert "index.md:9: WARNING: Error rendering jinja template: UndefinedError" in result.stderr
+    # and specifically NOT at the bogus content_offset-derived line near the top
+    assert "index.md:2:" not in result.stderr
+
+
 def test_heading(tmp_path: Path, snapshot_doctree):
     (tmp_path / "conf.py").write_text(CONF_CONTENT)
     (tmp_path / "index.rst").write_text(
@@ -694,3 +737,242 @@ def test_include_outside_srcdir(tmp_path: Path):
     html = (result.build / "html" / "index.html").read_text(encoding="utf8")
     assert "in-srcdir" in html
     assert "TOP_SECRET" not in html
+
+
+def test_file_bom(tmp_path: Path):
+    """A UTF-8 BOM at the start of a :file: template is stripped (fix 1).
+
+    Without stripping, the leading U+FEFF widens the heading text past its
+    underline, producing a "Title underline too short" warning.
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "template.jinja").write_bytes(b"\xef\xbb\xbfHeading\n=======\n")
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+            :file: template.jinja
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert not result.stderr
+    assert "\ufeff" not in result.doctree().astext()
+
+
+def test_include_bom(tmp_path: Path):
+    """A UTF-8 BOM in an ``{% include %}``-d template is stripped (fix 1)."""
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "partial.jinja").write_bytes(b"\xef\xbb\xbfincluded")
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+
+            before {% include "partial.jinja" %} after
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert not result.stderr
+    text = result.doctree().astext()
+    assert "\ufeff" not in text
+    assert "included" in text
+
+
+def test_raw_format_normalized(tmp_path: Path):
+    """A non-normalized :raw: format (upper case) is lower-cased (fix 2),
+    so docutils writers recognize it and the content is not silently dropped.
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+            :ctx: {"name": "World"}
+            :raw: HTML
+
+            Hello <em>{{ name }}</em>
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert not result.stderr
+    raw_formats = [node["format"] for node in result.doctree().findall(nodes.raw)]
+    assert raw_formats == ["html"]
+    html = (result.build / "html" / "index.html").read_text(encoding="utf8")
+    assert "Hello <em>World</em>" in html
+
+
+def test_raw_empty_validated_before_render(tmp_path: Path):
+    """An empty :raw: option is validated *before* rendering (fix 2):
+    combined with an undefined variable, only the raw warning fires and the
+    render never runs (so no render-error warning appears).
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+            :raw:
+
+            {{ undefined_variable }}
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert "'raw' option requires an output format" in result.stderr
+    assert "Error rendering jinja template" not in result.stderr
+
+
+def test_warning_subtypes_suppressible(tmp_path: Path):
+    """Warnings carry a ``jinja2.<subtype>`` so they can be suppressed
+    granularly (fix 3). A render error is suppressed by ``jinja2.render`` but
+    not by ``jinja2.config`` (version-independent, unlike asserting the tag).
+    """
+    index = dedent(
+        """\
+        Test
+        ====
+        .. jinja::
+
+            {{ undefined_variable }}
+        """
+    )
+    # suppressing the render subtype removes the warning entirely
+    (tmp_path / "conf.py").write_text(CONF_CONTENT + '\nsuppress_warnings = ["jinja2.render"]')
+    (tmp_path / "index.rst").write_text(index)
+    result = run_sphinxbuild(tmp_path)
+    assert result.stderr == ""
+
+    # suppressing a different subtype leaves the render warning in place
+    (tmp_path / "conf.py").write_text(CONF_CONTENT + '\nsuppress_warnings = ["jinja2.config"]')
+    result = run_sphinxbuild(tmp_path, clear_build=False)
+    assert "Error rendering jinja template" in result.stderr
+
+
+def test_render_error_inline_line_accurate(tmp_path: Path):
+    """An inline render error is reported at the actual failing document line,
+    not the directive's first line (fix 4).
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+
+            line one ok
+            line two ok
+            {{ boom }} here
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    # the directive is on line 3, but the failing content is the 3rd content
+    # line, i.e. document line 7 (content_offset 4 + template line 3)
+    assert "index.rst:7: WARNING: Error rendering jinja template: UndefinedError" in result.stderr
+    # the directive's own line is no longer reported for the render error
+    assert "index.rst:3: WARNING: Error rendering" not in result.stderr
+    # minijinja's own " (in index:N)" position suffix is stripped for inline errors
+    assert "(in " not in result.stderr
+
+
+def test_render_error_file_position(tmp_path: Path):
+    """A render error in a :file: template keeps the directive location, but
+    appends the (relative) template position to the message (fix 4).
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "template.jinja").write_text("ok line\n{{ boom }}\n")
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+            :file: template.jinja
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert (
+        "index.rst:3: WARNING: Error rendering jinja template: UndefinedError: "
+        "undefined value (template.jinja:2)" in result.stderr
+    )
+
+
+def test_render_error_debug_code_frame(tmp_path: Path):
+    """In debug mode, a render error includes minijinja's caret code-frame,
+    ideal for debugging (fix 4).
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+            :debug:
+
+            {{ missing }}
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert "Error rendering jinja template:" in result.stderr
+    # the caret code-frame (only present in debug mode) points at the token;
+    # the one-line non-debug message would contain no carets
+    assert "^^^" in result.stderr
+
+
+def test_non_dict_contexts(tmp_path: Path):
+    """A non-dict ``jinja2_contexts`` is handled gracefully with a warning,
+    rather than aborting the whole build with an unhandled TypeError (fix 5).
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT + "\njinja2_contexts = ['item']")
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja:: item
+
+            hallo
+        """
+        )
+    )
+    # must not raise (previously an unhandled TypeError aborted the build)
+    result = run_sphinxbuild(tmp_path)
+    assert "Expected jinja2_contexts to be a dict, got list" in result.stderr
+    assert (result.build / "html" / "index.html").exists()
+
+
+def test_reserved_env_key(tmp_path: Path):
+    """Defining ``env`` in a context warns (it shadows the reserved Sphinx
+    environment variable), but the override is still applied (fix 6).
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "index.rst").write_text(
+        dedent(
+            """\
+        Test
+        ====
+        .. jinja::
+            :ctx: {"env": "overridden"}
+
+            value is {{ env }}
+        """
+        )
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert "reserved key 'env'" in result.stderr
+    assert "value is overridden" in result.doctree().astext()
