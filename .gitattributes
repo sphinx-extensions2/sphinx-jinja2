@@ -1,2 +1,4 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Normalise line endings to LF in the repository, and force LF in the working
+# tree too (eol=lf) so Windows checkouts stay consistent: git status keeps
+# clean and Jinja templates render with LF line endings across platforms.
+* text=auto eol=lf

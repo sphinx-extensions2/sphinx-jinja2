@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+from io import StringIO
 from pathlib import Path
 import pickle
 import shutil
-import subprocess
+import sys
 from textwrap import dedent
 
 from docutils import nodes
 from sphinx import version_info as sphinx_version_info
+from sphinx.application import Sphinx
+from sphinx.util.docutils import docutils_namespace, patch_docutils
 
 
 class BuildResult:
-    def __init__(self, build: Path, stdout: Path, stderr: Path) -> None:
+    def __init__(self, build: Path, stdout: str, stderr: str) -> None:
         self._build = build
         self._stdout = stdout
         self._stderr = stderr
@@ -22,11 +25,11 @@ class BuildResult:
 
     @property
     def stdout(self) -> str:
-        return self._stdout.read_text()
+        return self._stdout
 
     @property
     def stderr(self) -> str:
-        return self._stderr.read_text()
+        return self._stderr
 
     def doctree(self, docname: str = "index") -> nodes.document:
         path = self._build / "doctrees" / f"{docname}.doctree"
@@ -36,29 +39,54 @@ class BuildResult:
 
 
 def run_sphinxbuild(path: Path, clear_build: bool = True) -> BuildResult:
+    """Build the Sphinx project at ``path`` in-process and return the result.
+
+    The build runs in the current process (rather than shelling out to
+    ``python -m sphinx``), so that coverage of the extension is recorded and
+    no external ``python``/``sphinx`` on ``PATH`` is required.  On failure the
+    underlying Sphinx exception is allowed to propagate (all tests expect a
+    successful build).
+
+    :param path: the source directory (also used as the config directory).
+    :param clear_build: if true, remove any previous build output first,
+        forcing a full build; otherwise reuse the saved environment stored in
+        the doctree directory, exercising Sphinx's incremental rebuild.
+    """
     build_path = path / "_build"
     if clear_build and build_path.is_dir():
-        shutil.rmtree("_build")
-    build_path.mkdir(exist_ok=True)
-    log_path = build_path / "logs"
-    while log_path.exists():
-        log_path = log_path.with_name(log_path.name + "_")
-    log_path.mkdir()
-    stdout_file = log_path / "stdout.txt"
-    stderr_file = log_path / "stderr.txt"
-    with stdout_file.open("w") as sphinx_stdout, stderr_file.open("w") as sphinx_stderr:
-        try:
-            subprocess.check_call(
-                ["python", "-m", "sphinx", "-M", "html", str(path), str(build_path), "-T"],
-                stdout=sphinx_stdout,
-                stderr=sphinx_stderr,
-            )
-        except subprocess.CalledProcessError:
-            print(stdout_file.read_text())
-            print(stderr_file.read_text())
-            raise
+        shutil.rmtree(build_path)
 
-    return BuildResult(build_path, stdout_file, stderr_file)
+    status, warning = StringIO(), StringIO()
+
+    # A conf.py may mutate ``sys.path`` and import modules from the source
+    # directory (e.g. the ``_funcs`` module used to test filter/test import
+    # strings).  Snapshot ``sys.path`` and, afterwards, evict any module loaded
+    # from the source directory, so that an in-process build cannot leak state
+    # into (or shadow an identically-named module in) a later build.
+    src = path.resolve()
+    saved_sys_path = sys.path.copy()
+    try:
+        # ``patch_docutils`` + ``docutils_namespace`` ensure docutils global
+        # registrations (directives, roles, nodes) don't leak between builds.
+        with patch_docutils(str(path)), docutils_namespace():
+            app = Sphinx(
+                srcdir=str(path),
+                confdir=str(path),
+                outdir=str(build_path / "html"),
+                doctreedir=str(build_path / "doctrees"),
+                buildername="html",
+                status=status,
+                warning=warning,
+            )
+            app.build()
+    finally:
+        sys.path[:] = saved_sys_path
+        for name, module in list(sys.modules.items()):
+            module_file = getattr(module, "__file__", None)
+            if module_file and Path(module_file).resolve().is_relative_to(src):
+                del sys.modules[name]
+
+    return BuildResult(build_path, status.getvalue(), warning.getvalue())
 
 
 CONF_CONTENT = """
@@ -389,15 +417,17 @@ def test_filters_and_tests(tmp_path: Path, snapshot_doctree):
         )
     )
     result = run_sphinxbuild(tmp_path)
-    for stderr_line in result.stderr.splitlines():
-        # Sphinx >=7.3 warns that function objects cannot be cached;
-        # the exact spelling varies ("unpickable" on 7.4.x, "unpickleable" on >=8.0),
-        # and older Sphinx emits no such warning at all.
-        assert "cannot cache unpick" in stderr_line
+    # Sphinx >=7.3 warns that function objects cannot be cached;
+    # the exact spelling varies ("unpickable" on 7.4.x, "unpickleable" on >=8.0),
+    # and older Sphinx emits no such warning at all.
+    lines = result.stderr.splitlines()
+    # no other (unexpected) warnings should be emitted
+    assert all("cannot cache unpick" in line for line in lines)
     if sphinx_version_info >= (7, 3):
         # on supported Sphinx the warning must actually be present
-        # (guarding against it silently disappearing)
-        assert any("cannot cache unpick" in line for line in result.stderr.splitlines())
+        # (guarding against it silently disappearing, which the all() check
+        # above would pass vacuously for)
+        assert any("cannot cache unpick" in line for line in lines)
     assert result.doctree() == snapshot_doctree
 
 
@@ -650,7 +680,7 @@ def test_include_outside_srcdir(tmp_path: Path):
 
         .. jinja::
 
-            {{% include "{secret}" %}}
+            {{% include "{secret.as_posix()}" %}}
 
         .. jinja::
 
@@ -661,6 +691,6 @@ def test_include_outside_srcdir(tmp_path: Path):
     result = run_sphinxbuild(srcdir)
     print(result.stderr)
     assert result.stderr.count("WARNING: Error rendering jinja template: TemplateNotFound") == 3
-    html = (result.build / "html" / "index.html").read_text()
+    html = (result.build / "html" / "index.html").read_text(encoding="utf8")
     assert "in-srcdir" in html
     assert "TOP_SECRET" not in html
