@@ -49,6 +49,9 @@ The Sphinx environment is also available by default as ``env``:
 
         This is {{ env.config.project }} version {{ env.config.version }}.
 
+The ``env`` key is reserved for the Sphinx environment.
+A context may still define ``env`` to override it (a ``jinja2.config`` warning is emitted when it does).
+
 To set globally available variables, use the ``jinja2_contexts`` option in your ``conf.py``, and refer to them by name as the first argument to the ``jinja`` directive:
 
 .. jinja2-example::
@@ -180,16 +183,25 @@ To see the rendered templates in the built documentation, use the ``debug`` opti
 Warning messages
 ****************
 
-Warning messages are displayed in the Sphinx build output, for problematic inputs, these all have the type ``jinja2``, which can be used to `suppress them in the Sphinx configuration <https://www.sphinx-doc.org/en/master/usage/configuration.html#confval-suppress_warnings>`__:
+Warning messages are displayed in the Sphinx build output for problematic inputs.
+These all have the type ``jinja2``, with a subtype identifying the category of problem:
+
+- ``jinja2.config`` -- configuration problems (an unknown or malformed context, ``ctx`` option, ``jinja2_env_kwargs``, filter/test, ...)
+- ``jinja2.template`` -- problems reading a template file
+- ``jinja2.render`` -- problems rendering a template
+
+These types can be used to `suppress them in the Sphinx configuration <https://www.sphinx-doc.org/en/master/usage/configuration.html#confval-suppress_warnings>`__, either all together or by subtype:
 
 .. code-block:: python
 
-    suppress_warnings = ["jinja2"]
+    suppress_warnings = ["jinja2"]  # suppress all
+    suppress_warnings = ["jinja2.render"]  # suppress only render errors
 
-Since it is difficult / impossible to map the source line numbers, from the template to the Jinja rendered content:
+Rendering errors (such as an undefined variable) are reported at the line where they occur:
 
-- In reStructuredText documents, problems with the parsing of the rendered content always refer to the first line number either of the ``jinja`` directive, or the template file (when using the ``file`` option).
-- In MyST Markdown documents, they refer to a line number within the rendered content, offset from the ``jinja`` directive (and with myst-parser >=5, they are always attributed to the document containing the directive, rather than the template file).
+- In reStructuredText documents, an inline template's rendering error is attributed to the actual failing line in the document; for a template file (``file`` option), the position within the template file is appended to the message (e.g. ``(template.jinja:2)``).
+- Problems with *parsing* the rendered content (as opposed to rendering it) are difficult / impossible to map back to the template source, and so refer to the first line number either of the ``jinja`` directive, or the template file (when using the ``file`` option).
+- In MyST Markdown documents, rendering errors are reported at the ``jinja`` directive's line; problems with *parsing* the rendered content refer to a line number within the rendered content, offset from the ``jinja`` directive (and with myst-parser >=5, they are always attributed to the document containing the directive, rather than the template file).
 
 Migration from Jinja2
 ---------------------

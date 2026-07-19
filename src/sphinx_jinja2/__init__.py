@@ -176,44 +176,82 @@ class JinjaDirective(SphinxDirective):
 
     def run(self) -> list[nodes.Node]:
         conf = Jinja2Config.from_config(self.config)
-        location = (self.env.docname, self.get_source_info()[1])
+        directive_location = (self.env.docname, self.get_source_info()[1])
 
-        def _warn(msg: str) -> None:
-            LOGGER.warning(msg + " [jinja2]", location=location, type="jinja2")
+        def _warn(msg: str, subtype: str, *, location: Any = _MISSING) -> None:
+            # ``type``/``subtype`` drive ``suppress_warnings`` filtering (e.g.
+            # ``jinja2.render``); Sphinx renders the ``[jinja2.<subtype>]`` tag
+            # itself, so we must not append it to the message text (doing so
+            # doubles it on Sphinx >=8, where show_warning_types defaults on).
+            LOGGER.warning(
+                msg,
+                location=directive_location if location is _MISSING else location,
+                type="jinja2",
+                subtype=subtype,
+            )
 
         # create the context
         # precedence level: default < global < directive
         ctx = {"env": self.env}
+        if not isinstance(conf.contexts, dict):
+            # Sphinx only warns (does not abort) on a config type mismatch, so
+            # a misconfigured jinja2_contexts still reaches us; guard against it
+            # rather than raising an unhandled error mid-build
+            _warn(
+                f"Expected jinja2_contexts to be a dict, got {type(conf.contexts).__name__}",
+                "config",
+            )
+            return []
+        # ``env`` is reserved for the Sphinx environment; a context may still
+        # override it (the author may intend to), but we warn that it does
+        env_overridden = False
         if self.arguments:
             name = self.arguments[0]
             if name not in conf.contexts:
-                _warn(f"Context {self.arguments[0]!r} not found in jinja2_contexts")
+                _warn(f"Context {self.arguments[0]!r} not found in jinja2_contexts", "config")
                 return []
             if not isinstance(conf.contexts[name], dict):
                 _warn(
-                    f"Expected context {name!r} to be a dict, got {type(conf.contexts[name]).__name__}"
+                    f"Expected context {name!r} to be a dict, got {type(conf.contexts[name]).__name__}",
+                    "config",
                 )
                 return []
+            env_overridden = env_overridden or "env" in conf.contexts[name]
             ctx.update(conf.contexts[name])
         if "ctx" in self.options:
             try:
                 ctx_option = json.loads(self.options["ctx"])
             except json.JSONDecodeError:
-                _warn("Error parsing 'ctx' option as JSON")
+                _warn("Error parsing 'ctx' option as JSON", "config")
                 return []
             if not isinstance(ctx_option, dict):
-                _warn(f"Expected 'ctx' option to be a dict, got {type(ctx_option).__name__}")
+                _warn(
+                    f"Expected 'ctx' option to be a dict, got {type(ctx_option).__name__}", "config"
+                )
                 return []
+            env_overridden = env_overridden or "env" in ctx_option
             ctx.update(ctx_option)
+        if env_overridden:
+            _warn(
+                "Context defines the reserved key 'env', overriding the Sphinx environment",
+                "config",
+            )
 
-        if "raw" in self.options and not self.options["raw"]:
-            _warn("'raw' option requires an output format, e.g. ':raw: html'")
-            return []
+        # normalize and validate the raw output format up-front, before any
+        # environment/render work: docutils writers match the format
+        # case-sensitively (e.g. ``'html' in format.split()``), so ':raw: HTML'
+        # must be lower-cased or the content is silently dropped
+        raw_format: str | None = None
+        if "raw" in self.options:
+            raw_format = " ".join(self.options["raw"].lower().split())
+            if not raw_format:
+                _warn("'raw' option requires an output format, e.g. ':raw: html'", "config")
+                return []
 
         # create the minijinja environment,
         # loading referenced templates from the source directory,
         # and recording them, so they can be noted as dependencies of this document
-        template_base = Path(str(self.env.app.srcdir))
+        template_base = Path(str(self.env.srcdir))
         loaded_templates: list[Path] = []
 
         def _load_template(name: str) -> str | None:
@@ -235,7 +273,8 @@ class JinjaDirective(SphinxDirective):
                 # a UnicodeDecodeError (non-UTF-8 template) is deliberately left
                 # to propagate to the render-error handler, which reports it with
                 # context, rather than being masked here as "template not found"
-                return path.read_text("utf8")
+                # (utf-8-sig transparently strips a leading BOM, if present)
+                return path.read_text("utf-8-sig")
             except OSError:
                 return None
 
@@ -252,12 +291,13 @@ class JinjaDirective(SphinxDirective):
         if unsupported:
             _warn(
                 "Ignoring jinja2_env_kwargs not supported by minijinja.Environment: "
-                + ", ".join(unsupported)
+                + ", ".join(unsupported),
+                "config",
             )
         try:
             env = minijinja.Environment(loader=_load_template, **env_kwargs)
         except Exception as exc:
-            _warn(f"Error creating environment: {exc.__class__.__name__}: {exc}")
+            _warn(f"Error creating environment: {exc.__class__.__name__}: {exc}", "config")
             return []
 
         # add the filters and tests
@@ -265,13 +305,13 @@ class JinjaDirective(SphinxDirective):
             for filter_name, filter_func in conf.filters.items():
                 env.add_filter(filter_name, _resolve_callable(filter_func))
         except Exception as exc:
-            _warn(f"Error adding filters: {exc.__class__.__name__}: {exc}")
+            _warn(f"Error adding filters: {exc.__class__.__name__}: {exc}", "config")
             return []
         try:
             for test_name, test_func in conf.tests.items():
                 env.add_test(test_name, _resolve_callable(test_func))
         except Exception as exc:
-            _warn(f"Error adding tests: {exc.__class__.__name__}: {exc}")
+            _warn(f"Error adding tests: {exc.__class__.__name__}: {exc}", "config")
             return []
 
         # get the jinja template, from file or content
@@ -283,15 +323,16 @@ class JinjaDirective(SphinxDirective):
         template_name = self.env.docname
         if template_filename := self.options.get("file"):
             if self.content:
-                _warn("Both file and content specified, ignoring content")
+                _warn("Both file and content specified, ignoring content", "config")
             _, source = self.env.relfn2path(template_filename)
             template_name = template_filename
             line = 1
             try:
-                with open(source, encoding="utf8") as f:
+                # utf-8-sig transparently strips a leading BOM, if present
+                with open(source, encoding="utf-8-sig") as f:
                     content = f.read()
             except (OSError, UnicodeDecodeError) as exc:
-                _warn(f"Error reading template file {source}: {exc}")
+                _warn(f"Error reading template file {source}: {exc}", "template")
                 return []
             self.env.note_dependency(source)
         else:
@@ -301,10 +342,48 @@ class JinjaDirective(SphinxDirective):
         try:
             new_content = env.render_str(content, template_name, **ctx)
         except minijinja.TemplateError as exc:
-            _warn(f"Error rendering jinja template: {exc.kind}: {exc.message}")
+            debug = conf.debug or "debug" in self.options
+            # ``exc.line`` is the 1-based line within the template (may be None);
+            # minijinja also embeds this position in ``exc.message`` as the
+            # suffix " (in <name>:<line>)", which we strip so we can attribute
+            # the error to the real document line (inline) or restate it (file).
+            exc_line = getattr(exc, "line", None)
+            base = exc.message
+            if exc_line is not None and exc.name:
+                base = base.removesuffix(f" (in {exc.name}:{exc_line})")
+            if debug:
+                # minijinja's str() includes a caret code-frame, ideal for debugging
+                message = f"Error rendering jinja template:\n{exc}"
+            elif template_filename:
+                # file template: note the position within the template file,
+                # keeping the directive as the reported document location
+                position = f" ({exc.name}:{exc_line})" if exc_line is not None and exc.name else ""
+                message = f"Error rendering jinja template: {exc.kind}: {base}{position}"
+            else:
+                message = f"Error rendering jinja template: {exc.kind}: {base}"
+            if (
+                not template_filename
+                and exc_line is not None
+                and isinstance(self.state_machine, StateMachine)
+            ):
+                # inline template in a docutils state machine: attribute the
+                # error to the actual document line (content line N is document
+                # line content_offset + N). Under myst-parser's MockState the
+                # content_offset is not document-relative (mirroring the
+                # insert_input predicate below), so we do not apply this there.
+                _warn(
+                    message,
+                    "render",
+                    location=(self.env.docname, self.content_offset + exc_line),
+                )
+            else:
+                # file templates (position carried in the message), errors with
+                # no line information, and non-docutils states (e.g. MyST) fall
+                # back to the directive location
+                _warn(message, "render")
             return []
         except Exception as exc:
-            _warn(f"Error rendering jinja template: {exc.__class__.__name__}: {exc}")
+            _warn(f"Error rendering jinja template: {exc.__class__.__name__}: {exc}", "render")
             return []
         finally:
             # note all templates loaded during the render (e.g. via include/extends),
@@ -314,7 +393,7 @@ class JinjaDirective(SphinxDirective):
 
         return_nodes: list[nodes.Node] = []
 
-        if raw_format := self.options.get("raw"):
+        if raw_format is not None:
             # return the rendered template as raw (non-parsed) content
             raw_node = nodes.raw("", new_content, format=raw_format)
             self.set_source_info(raw_node)
