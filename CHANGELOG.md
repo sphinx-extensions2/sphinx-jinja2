@@ -22,7 +22,7 @@ Most templates should render identically, however, note the following difference
   (lists passed in from Python keep their Python form),
   and `round` rounds halves away from zero (`3.0`).
   Use `{% if var %}{{ var }}{% endif %}` guards or explicit formatting if this matters.
-- A small number of Jinja2-only filters (e.g. `wordwrap`, `urlize`, `xmlattr`, `center`, `wordcount`)
+- A small number of Jinja2-only filters (e.g. `urlize`, `xmlattr`, `center`, `wordcount`, and `wordwrap` on minijinja 2.x)
   are not built in to minijinja; they can be re-added via `jinja2_filters` if required.
 - Custom filters and tests receive values as plain arguments;
   Jinja2's `@pass_context`, `@pass_environment` and `@pass_eval_context` decorators
