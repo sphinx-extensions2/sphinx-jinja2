@@ -374,15 +374,21 @@ class JinjaDirective(SphinxDirective):
                 and isinstance(self.state_machine, StateMachine)
             ):
                 # inline template in a docutils state machine: attribute the
-                # error to the actual document line (content line N is document
-                # line content_offset + N). Under myst-parser's MockState the
-                # content_offset is not document-relative (mirroring the
-                # insert_input predicate below), so we do not apply this there.
-                _warn(
-                    message,
-                    "render",
-                    location=(self.env.docname, self.content_offset + exc_line),
+                # error to the actual source line. content_offset is an offset
+                # into the state machine's combined input (which includes any
+                # ``.. include::``-d files), not a line of the current document,
+                # so resolve it through the state machine to a (source, line).
+                # Under myst-parser's MockState the content_offset is not
+                # document-relative (mirroring the insert_input predicate
+                # below), so we do not apply this there.
+                err_source, err_line = self.state_machine.get_source_and_line(
+                    self.content_offset + exc_line
                 )
+                if err_source is not None and err_line is not None:
+                    _warn(message, "render", location=f"{err_source}:{err_line}")
+                else:
+                    # docutils returns (None, None) for an out-of-range line
+                    _warn(message, "render")
             else:
                 # file templates and other loaded templates (position carried in
                 # the message), errors with no line information, and

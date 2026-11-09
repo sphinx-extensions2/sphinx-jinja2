@@ -1024,3 +1024,16 @@ def test_render_error_in_other_template_keeps_directive_line(
         r"undefined value[^\n]*\(helper\.jinja:4\)",
         result.stderr,
     ), result.stderr
+
+
+def test_render_error_inline_in_included_rst(tmp_path: Path):
+    """An inline render error in a directive inside an ``.. include::``-d file is
+    reported against the included file and its line, not at a line of the
+    including document (which may not exist).
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT + "\nexclude_patterns = ['part.rst']")
+    (tmp_path / "index.rst").write_text("Test\n====\n\npara\n\n.. include:: part.rst\n")
+    (tmp_path / "part.rst").write_text(".. jinja::\n\n    ok\n    {{ boom }}\n")
+    result = run_sphinxbuild(tmp_path)
+    assert "part.rst:4: WARNING: Error rendering jinja template" in result.stderr, result.stderr
+    assert "index.rst:" not in result.stderr, result.stderr
