@@ -199,7 +199,11 @@ These types can be used to `suppress them in the Sphinx configuration <https://w
 
 Rendering errors (such as an undefined variable) are reported at the line where they occur:
 
-- In reStructuredText documents, an inline template's rendering error is attributed to the actual failing line in the document; for a template file (``file`` option), the position within the template file is appended to the message (e.g. ``(template.jinja:2)``).
+- In reStructuredText documents, an inline template's rendering error is attributed to the actual failing line in the document
+  (or in the file it comes from, when the directive is in a file pulled in by ``.. include::``).
+- For a template file (``file`` option), and for an error inside another template that an inline template loads
+  (with ``{% extends %}`` or ``{% import %}``), the error is reported at the ``jinja`` directive's line,
+  and the position within that template file is appended to the message (e.g. ``(template.jinja:2)``).
 - Problems with *parsing* the rendered content (as opposed to rendering it) are difficult / impossible to map back to the template source, and so refer to the first line number either of the ``jinja`` directive, or the template file (when using the ``file`` option).
 - In MyST Markdown documents, rendering errors are reported at the ``jinja`` directive's line; problems with *parsing* the rendered content refer to a line number within the rendered content, offset from the ``jinja`` directive (and with myst-parser >=5, they are always attributed to the document containing the directive, rather than the template file).
 

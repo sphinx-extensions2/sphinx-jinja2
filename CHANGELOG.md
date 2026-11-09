@@ -60,11 +60,13 @@ Most templates should render identically, however, note the following difference
   duplicated in the message text on Sphinx >=8 (nor, on Sphinx <8, appended to it at all;
   suppression via the warning type/subtype is unaffected on all versions).
 - Rendering errors in inline templates are now reported at the actual failing line in
-  the document (rather than the directive's first line); errors in template files include
-  the position within the file, and the `debug` option / `jinja2_debug` now includes
-  minijinja's code-frame in the error message.
-- A misconfigured non-dict `jinja2_contexts` now emits a warning, instead of aborting the
-  whole build with an unhandled error.
+  the document (rather than the directive's first line), including inside `.. include::`-d files;
+  errors in template files, and in templates an inline template extends or imports,
+  keep the directive's line and include the position within that template file,
+  and the `debug` option / `jinja2_debug` now includes minijinja's code-frame in the error message.
+- A misconfigured non-dict `jinja2_contexts` now emits a warning for directives that name a context,
+  instead of aborting the whole build with an unhandled error
+  (directives that name no context are unaffected).
 - Overriding the reserved `env` context key now emits a warning (the override is still
   applied).
 
