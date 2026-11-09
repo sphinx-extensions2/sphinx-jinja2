@@ -979,3 +979,14 @@ def test_reserved_env_key(tmp_path: Path):
     result = run_sphinxbuild(tmp_path)
     assert "reserved key 'env'" in result.stderr
     assert "value is overridden" in result.doctree().astext()
+
+
+def test_non_dict_contexts_unused(tmp_path: Path):
+    """A misconfigured ``jinja2_contexts`` does not stop directives that name no
+    context from rendering (as before the guard was added).
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT + "\njinja2_contexts = ['item']")
+    (tmp_path / "index.rst").write_text("Test\n====\n\n.. jinja::\n\n    hi {{ 1 + 1 }}\n")
+    result = run_sphinxbuild(tmp_path)
+    assert "Expected jinja2_contexts" not in result.stderr
+    assert "hi 2" in (result.build / "html" / "index.html").read_text()

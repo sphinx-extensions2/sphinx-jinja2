@@ -193,20 +193,21 @@ class JinjaDirective(SphinxDirective):
         # create the context
         # precedence level: default < global < directive
         ctx = {"env": self.env}
-        if not isinstance(conf.contexts, dict):
-            # Sphinx only warns (does not abort) on a config type mismatch, so
-            # a misconfigured jinja2_contexts still reaches us; guard against it
-            # rather than raising an unhandled error mid-build
-            _warn(
-                f"Expected jinja2_contexts to be a dict, got {type(conf.contexts).__name__}",
-                "config",
-            )
-            return []
         # ``env`` is reserved for the Sphinx environment; a context may still
         # override it (the author may intend to), but we warn that it does
         env_overridden = False
         if self.arguments:
             name = self.arguments[0]
+            if not isinstance(conf.contexts, dict):
+                # Sphinx only warns (does not abort) on a config type mismatch, so
+                # a misconfigured jinja2_contexts still reaches us; guard against it
+                # rather than raising an unhandled error mid-build. Directives that
+                # name no context never read jinja2_contexts, so they still render.
+                _warn(
+                    f"Expected jinja2_contexts to be a dict, got {type(conf.contexts).__name__}",
+                    "config",
+                )
+                return []
             if name not in conf.contexts:
                 _warn(f"Context {self.arguments[0]!r} not found in jinja2_contexts", "config")
                 return []
