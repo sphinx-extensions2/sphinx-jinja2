@@ -49,6 +49,9 @@ The Sphinx environment is also available by default as ``env``:
 
         This is {{ env.config.project }} version {{ env.config.version }}.
 
+The ``env`` key is reserved for the Sphinx environment.
+A context may still define ``env`` to override it (a ``jinja2.config`` warning is emitted when it does).
+
 To set globally available variables, use the ``jinja2_contexts`` option in your ``conf.py``, and refer to them by name as the first argument to the ``jinja`` directive:
 
 .. jinja2-example::
@@ -180,16 +183,29 @@ To see the rendered templates in the built documentation, use the ``debug`` opti
 Warning messages
 ****************
 
-Warning messages are displayed in the Sphinx build output, for problematic inputs, these all have the type ``jinja2``, which can be used to `suppress them in the Sphinx configuration <https://www.sphinx-doc.org/en/master/usage/configuration.html#confval-suppress_warnings>`__:
+Warning messages are displayed in the Sphinx build output for problematic inputs.
+These all have the type ``jinja2``, with a subtype identifying the category of problem:
+
+- ``jinja2.config`` -- configuration problems (an unknown or malformed context, ``ctx`` option, ``jinja2_env_kwargs``, filter/test, ...)
+- ``jinja2.template`` -- problems reading a template file
+- ``jinja2.render`` -- problems rendering a template
+
+These types can be used to `suppress them in the Sphinx configuration <https://www.sphinx-doc.org/en/master/usage/configuration.html#confval-suppress_warnings>`__, either all together or by subtype:
 
 .. code-block:: python
 
-    suppress_warnings = ["jinja2"]
+    suppress_warnings = ["jinja2"]  # suppress all
+    suppress_warnings = ["jinja2.render"]  # suppress only render errors
 
-Since it is difficult / impossible to map the source line numbers, from the template to the Jinja rendered content:
+Rendering errors (such as an undefined variable) are reported at the line where they occur:
 
-- In reStructuredText documents, problems with the parsing of the rendered content always refer to the first line number either of the ``jinja`` directive, or the template file (when using the ``file`` option).
-- In MyST Markdown documents, they refer to a line number within the rendered content, offset from the ``jinja`` directive (and with myst-parser >=5, they are always attributed to the document containing the directive, rather than the template file).
+- In reStructuredText documents, an inline template's rendering error is attributed to the actual failing line in the document
+  (or in the file it comes from, when the directive is in a file pulled in by ``.. include::``).
+- For a template file (``file`` option), and for an error inside another template that an inline template loads
+  (with ``{% extends %}`` or ``{% import %}``), the error is reported at the ``jinja`` directive's line,
+  and the position within that template file is appended to the message (e.g. ``(template.jinja:2)``).
+- Problems with *parsing* the rendered content (as opposed to rendering it) are difficult / impossible to map back to the template source, and so refer to the first line number either of the ``jinja`` directive, or the template file (when using the ``file`` option).
+- In MyST Markdown documents, rendering errors are reported at the ``jinja`` directive's line; problems with *parsing* the rendered content refer to a line number within the rendered content, offset from the ``jinja`` directive (and with myst-parser >=5, they are always attributed to the document containing the directive, rather than the template file).
 
 Migration from Jinja2
 ---------------------
@@ -203,10 +219,19 @@ Most templates will render identically, but note the following differences:
   Jinja2-only arguments are ignored, with a warning.
 - Undefined variables raise errors (as previously, with ``StrictUndefined``),
   but this can now be relaxed with ``jinja2_env_kwargs = {"undefined_behavior": "lenient"}``.
-- ``None`` values are rendered as ``none`` rather than ``None``
-  (use ``{% if var %}{{ var }}{% endif %}`` guards if this matters).
-- A small number of Jinja2-only filters (e.g. ``wordwrap``, ``urlize``, ``xmlattr``, ``center``, ``wordcount``)
+- How some values render depends on the installed minijinja version (any ``minijinja>=2.15``, including 3.x, is supported).
+  ``None`` and booleans render as with Jinja2 (``None``, ``True``) from minijinja 2.22, and as ``none``, ``true`` before it.
+  Before minijinja 3.0, strings in lists and dicts created in a template are double-quoted
+  (``{{ ['a', 1] }}`` gives ``["a", 1]``, where Jinja2 gives ``['a', 1]``), and tuples render as lists.
+  Lists and dicts passed in from Python keep their Python form on every version.
+  From minijinja 3.0, the ``round`` filter rounds halves to even (``{{ 2.5 | round }}`` is ``2.0``);
+  before 3.0, it rounds halves away from zero (``3.0``).
+  Use ``{% if var %}{{ var }}{% endif %}`` guards or explicit formatting if this matters.
+- A small number of Jinja2-only filters (e.g. ``urlize``, ``xmlattr``, ``center``, ``wordcount``)
   are not built in to minijinja; they can be re-added via ``jinja2_filters`` if required.
+  minijinja has a built-in ``wordwrap`` only from 2.24, and it takes keyword arguments only
+  (``wordwrap(width=79)``; Jinja2's ``wordwrap(79)`` fails);
+  a ``wordwrap`` added via ``jinja2_filters`` replaces it.
 - Custom filters and tests receive values as plain arguments;
   Jinja2's ``@pass_context``, ``@pass_environment`` and ``@pass_eval_context`` decorators
   are not supported by minijinja (such filters fail when the template is rendered, with a warning).
