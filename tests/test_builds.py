@@ -9,6 +9,7 @@ import sys
 from textwrap import dedent
 
 from docutils import nodes
+from docutils.statemachine import StateMachine
 import pytest
 from sphinx import version_info as sphinx_version_info
 from sphinx.application import Sphinx
@@ -1037,3 +1038,27 @@ def test_render_error_inline_in_included_rst(tmp_path: Path):
     result = run_sphinxbuild(tmp_path)
     assert "part.rst:4: WARNING: Error rendering jinja template" in result.stderr, result.stderr
     assert "index.rst:" not in result.stderr, result.stderr
+
+
+def test_render_error_inline_unmapped_line(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """If docutils cannot map the failing line to a (source, line) pair, the
+    inline render error falls back to the directive location, rather than
+    being reported at a ``None:None`` location.
+    """
+    original = StateMachine.get_source_and_line
+
+    def unmapped(self: StateMachine, lineno: int | None = None) -> tuple[str | None, int | None]:
+        # the failing template line 3 sits at absolute line 7 (content_offset
+        # 4 + 3); every other lookup, including the directive's own, is real
+        if lineno == 7:
+            return None, None
+        return original(self, lineno)
+
+    monkeypatch.setattr(StateMachine, "get_source_and_line", unmapped)
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "index.rst").write_text(
+        "Test\n====\n.. jinja::\n\n    line one ok\n    line two ok\n    {{ boom }} here\n"
+    )
+    result = run_sphinxbuild(tmp_path)
+    assert "index.rst:3: WARNING: Error rendering jinja template" in result.stderr, result.stderr
+    assert "None" not in result.stderr, result.stderr
