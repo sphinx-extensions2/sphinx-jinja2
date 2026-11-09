@@ -32,6 +32,9 @@ docs = ["furo"]
 line-length = 100
 
 [tool.ruff.lint]
+# Pin the base rule set: ruff >=0.16 widened its default selection,
+# so the selection would otherwise change with every ruff bump.
+select = ["E4", "E7", "E9", "F"]
 extend-select = ["B0", "C4", "I", "ICN", "ISC", "N", "RUF", "SIM", "UP"]
 extend-ignore = ["ISC001", "RUF009"]
 
