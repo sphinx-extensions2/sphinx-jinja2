@@ -219,14 +219,14 @@ Most templates will render identically, but note the following differences:
   Jinja2-only arguments are ignored, with a warning.
 - Undefined variables raise errors (as previously, with ``StrictUndefined``),
   but this can now be relaxed with ``jinja2_env_kwargs = {"undefined_behavior": "lenient"}``.
-- How some values render depends on the installed minijinja major version (2.x and 3.x are both supported).
-  With minijinja 3.x, ``None``, booleans and lists render as with Jinja2 (``None``, ``True``, ``[True, None]``),
-  and the ``round`` filter rounds halves to even (``{{ 2.5 | round }}`` is ``2.0``).
-  With minijinja 2.x, they render as ``none``, ``true`` and ``[true, none]``
-  (lists passed in from Python keep their Python form),
-  and ``round`` rounds halves away from zero (``3.0``).
+- How some values render depends on the installed minijinja version (any ``minijinja>=2.15``, including 3.x, is supported).
+  From minijinja 2.22, ``None``, booleans and lists render as with Jinja2 (``None``, ``True``, ``[True, None]``);
+  with minijinja 2.15 to 2.21, they render as ``none``, ``true`` and ``[true, none]``
+  (lists passed in from Python keep their Python form).
+  From minijinja 3.0, the ``round`` filter rounds halves to even (``{{ 2.5 | round }}`` is ``2.0``);
+  before 3.0, it rounds halves away from zero (``3.0``).
   Use ``{% if var %}{{ var }}{% endif %}`` guards or explicit formatting if this matters.
-- A small number of Jinja2-only filters (e.g. ``urlize``, ``xmlattr``, ``center``, ``wordcount``, and ``wordwrap`` on minijinja 2.x)
+- A small number of Jinja2-only filters (e.g. ``urlize``, ``xmlattr``, ``center``, ``wordcount``, and ``wordwrap`` before minijinja 2.24)
   are not built in to minijinja; they can be re-added via ``jinja2_filters`` if required.
 - Custom filters and tests receive values as plain arguments;
   Jinja2's ``@pass_context``, ``@pass_environment`` and ``@pass_eval_context`` decorators
