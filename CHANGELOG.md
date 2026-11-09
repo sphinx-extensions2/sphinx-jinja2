@@ -15,8 +15,13 @@ Most templates should render identically, however, note the following difference
   are unchanged; Jinja2-only arguments are ignored, with a warning.
 - Undefined variables still raise errors (as previously, with `StrictUndefined`),
   but this can now be relaxed with `jinja2_env_kwargs = {"undefined_behavior": "lenient"}`.
-- `None` values are rendered as `none` rather than `None`
-  (use `{% if var %}{{ var }}{% endif %}` guards if this matters).
+- How some values render depends on the installed minijinja major version (2.x and 3.x are both supported).
+  With minijinja 3.x, `None`, booleans and lists render as with Jinja2 (`None`, `True`, `[True, None]`),
+  and the `round` filter rounds halves to even (`{{ 2.5 | round }}` is `2.0`).
+  With minijinja 2.x, they render as `none`, `true` and `[true, none]`
+  (lists passed in from Python keep their Python form),
+  and `round` rounds halves away from zero (`3.0`).
+  Use `{% if var %}{{ var }}{% endif %}` guards or explicit formatting if this matters.
 - A small number of Jinja2-only filters (e.g. `wordwrap`, `urlize`, `xmlattr`, `center`, `wordcount`)
   are not built in to minijinja; they can be re-added via `jinja2_filters` if required.
 - Custom filters and tests receive values as plain arguments;
