@@ -15,10 +15,19 @@ Most templates should render identically, however, note the following difference
   are unchanged; Jinja2-only arguments are ignored, with a warning.
 - Undefined variables still raise errors (as previously, with `StrictUndefined`),
   but this can now be relaxed with `jinja2_env_kwargs = {"undefined_behavior": "lenient"}`.
-- `None` values are rendered as `none` rather than `None`
-  (use `{% if var %}{{ var }}{% endif %}` guards if this matters).
-- A small number of Jinja2-only filters (e.g. `wordwrap`, `urlize`, `xmlattr`, `center`, `wordcount`)
+- How some values render depends on the installed minijinja version (any `minijinja>=2.15`, including 3.x, is supported).
+  `None` and booleans render as with Jinja2 (`None`, `True`) from minijinja 2.22, and as `none`, `true` before it.
+  Before minijinja 3.0, strings in lists and dicts created in a template are double-quoted
+  (`{{ ['a', 1] }}` gives `["a", 1]`, where Jinja2 gives `['a', 1]`), and tuples render as lists.
+  Lists and dicts passed in from Python keep their Python form on every version.
+  From minijinja 3.0, the `round` filter rounds halves to even (`{{ 2.5 | round }}` is `2.0`);
+  before 3.0, it rounds halves away from zero (`3.0`).
+  Use `{% if var %}{{ var }}{% endif %}` guards or explicit formatting if this matters.
+- A small number of Jinja2-only filters (e.g. `urlize`, `xmlattr`, `center`, `wordcount`)
   are not built in to minijinja; they can be re-added via `jinja2_filters` if required.
+  minijinja has a built-in `wordwrap` only from 2.24, and it takes keyword arguments only
+  (`wordwrap(width=79)`; Jinja2's `wordwrap(79)` fails);
+  a `wordwrap` added via `jinja2_filters` replaces it.
 - Custom filters and tests receive values as plain arguments;
   Jinja2's `@pass_context`, `@pass_environment` and `@pass_eval_context` decorators
   are not supported by minijinja (such filters fail when the template is rendered, with a warning).
@@ -42,9 +51,33 @@ Most templates should render identically, however, note the following difference
   This is now the recommended usage, since function objects cannot be cached by Sphinx,
   and so always trigger full re-builds.
 
+### 🐛 Fixes
+
+- Template files (loaded via `:file:` or `{% include %}`) that begin with a UTF-8
+  byte-order mark are now decoded correctly (the BOM is stripped, rather than
+  injected into the rendered output).
+- The `raw` option's format is now normalized (lower-cased and whitespace-collapsed),
+  so e.g. `:raw: HTML` is recognized by docutils writers rather than silently
+  dropping the content; an empty format is also validated before rendering.
+- Warnings now carry a subtype (`jinja2.config`, `jinja2.template` or `jinja2.render`),
+  for granular control via `suppress_warnings`, and the warning-type tag is no longer
+  duplicated in the message text on Sphinx >=8 (nor, on Sphinx <8, appended to it at all;
+  suppression via the warning type/subtype is unaffected on all versions).
+- Rendering errors in inline templates are now reported at the actual failing line in
+  the document (rather than the directive's first line), including inside `.. include::`-d files;
+  errors in template files, and in templates an inline template extends or imports,
+  keep the directive's line and include the position within that template file,
+  and the `debug` option / `jinja2_debug` now includes minijinja's code-frame in the error message.
+- A misconfigured non-dict `jinja2_contexts` now emits a warning for directives that name a context,
+  instead of aborting the whole build with an unhandled error
+  (directives that name no context are unaffected).
+- Overriding the reserved `env` context key now emits a warning (the override is still
+  applied).
+
 ### 🧰 Maintenance
 
 - Support Python 3.11-3.14, Sphinx 7.2-9.x
+- Use `env.srcdir` instead of the deprecated `env.app.srcdir` (avoids a `RemovedInSphinx11Warning`)
 - PEP 639 license expression in packaging metadata
 - PyPI trusted publishing (OIDC) in CI
 - Updated CI actions, pre-commit hooks, Read the Docs config
