@@ -220,14 +220,18 @@ Most templates will render identically, but note the following differences:
 - Undefined variables raise errors (as previously, with ``StrictUndefined``),
   but this can now be relaxed with ``jinja2_env_kwargs = {"undefined_behavior": "lenient"}``.
 - How some values render depends on the installed minijinja version (any ``minijinja>=2.15``, including 3.x, is supported).
-  From minijinja 2.22, ``None``, booleans and lists render as with Jinja2 (``None``, ``True``, ``[True, None]``);
-  with minijinja 2.15 to 2.21, they render as ``none``, ``true`` and ``[true, none]``
-  (lists passed in from Python keep their Python form).
+  ``None`` and booleans render as with Jinja2 (``None``, ``True``) from minijinja 2.22, and as ``none``, ``true`` before it.
+  Before minijinja 3.0, strings in lists and dicts created in a template are double-quoted
+  (``{{ ['a', 1] }}`` gives ``["a", 1]``, where Jinja2 gives ``['a', 1]``), and tuples render as lists.
+  Lists and dicts passed in from Python keep their Python form on every version.
   From minijinja 3.0, the ``round`` filter rounds halves to even (``{{ 2.5 | round }}`` is ``2.0``);
   before 3.0, it rounds halves away from zero (``3.0``).
   Use ``{% if var %}{{ var }}{% endif %}`` guards or explicit formatting if this matters.
-- A small number of Jinja2-only filters (e.g. ``urlize``, ``xmlattr``, ``center``, ``wordcount``, and ``wordwrap`` before minijinja 2.24)
+- A small number of Jinja2-only filters (e.g. ``urlize``, ``xmlattr``, ``center``, ``wordcount``)
   are not built in to minijinja; they can be re-added via ``jinja2_filters`` if required.
+  minijinja has a built-in ``wordwrap`` only from 2.24, and it takes keyword arguments only
+  (``wordwrap(width=79)``; Jinja2's ``wordwrap(79)`` fails);
+  a ``wordwrap`` added via ``jinja2_filters`` replaces it.
 - Custom filters and tests receive values as plain arguments;
   Jinja2's ``@pass_context``, ``@pass_environment`` and ``@pass_eval_context`` decorators
   are not supported by minijinja (such filters fail when the template is rendered, with a warning).
