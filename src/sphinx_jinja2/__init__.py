@@ -352,18 +352,24 @@ class JinjaDirective(SphinxDirective):
             base = exc.message
             if exc_line is not None and exc.name:
                 base = base.removesuffix(f" (in {exc.name}:{exc_line})")
+            # the error may lie in another template the inline one pulls in
+            # (``{% extends %}``, ``{% import %}``), whose lines are not lines
+            # of the document: only errors in the inline template itself are
+            # attributed to a document line
+            in_inline_template = not template_filename and exc.name == template_name
             if debug:
                 # minijinja's str() includes a caret code-frame, ideal for debugging
                 message = f"Error rendering jinja template:\n{exc}"
-            elif template_filename:
-                # file template: note the position within the template file,
-                # keeping the directive as the reported document location
+            elif not in_inline_template:
+                # file template, or another template loaded by the inline one:
+                # note the position within that template file, keeping the
+                # directive as the reported document location
                 position = f" ({exc.name}:{exc_line})" if exc_line is not None and exc.name else ""
                 message = f"Error rendering jinja template: {exc.kind}: {base}{position}"
             else:
                 message = f"Error rendering jinja template: {exc.kind}: {base}"
             if (
-                not template_filename
+                in_inline_template
                 and exc_line is not None
                 and isinstance(self.state_machine, StateMachine)
             ):
@@ -378,9 +384,9 @@ class JinjaDirective(SphinxDirective):
                     location=(self.env.docname, self.content_offset + exc_line),
                 )
             else:
-                # file templates (position carried in the message), errors with
-                # no line information, and non-docutils states (e.g. MyST) fall
-                # back to the directive location
+                # file templates and other loaded templates (position carried in
+                # the message), errors with no line information, and
+                # non-docutils states (e.g. MyST) fall back to the directive location
                 _warn(message, "render")
             return []
         except Exception as exc:

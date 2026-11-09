@@ -9,6 +9,7 @@ import sys
 from textwrap import dedent
 
 from docutils import nodes
+import pytest
 from sphinx import version_info as sphinx_version_info
 from sphinx.application import Sphinx
 from sphinx.util.docutils import docutils_namespace, patch_docutils
@@ -990,3 +991,36 @@ def test_non_dict_contexts_unused(tmp_path: Path):
     result = run_sphinxbuild(tmp_path)
     assert "Expected jinja2_contexts" not in result.stderr
     assert "hi 2" in (result.build / "html" / "index.html").read_text()
+
+
+@pytest.mark.parametrize(
+    ("helper", "inline"),
+    [
+        pytest.param(
+            "a\n\nb\n{{ boom }}\n{% block b %}{% endblock %}\n",
+            '{% extends "helper.jinja" %}\n    {% block b %}hi{% endblock %}',
+            id="extends",
+        ),
+        pytest.param(
+            "{% macro f() %}\n\n\n{{ boom }}\n{% endmacro %}\n",
+            '{% from "helper.jinja" import f %}\n    {{ f() }}',
+            id="import",
+        ),
+    ],
+)
+def test_render_error_in_other_template_keeps_directive_line(
+    tmp_path: Path, helper: str, inline: str
+):
+    """An error raised inside an extended/imported template must not be
+    mis-attributed to a line of the inline template: the directive location is
+    kept, and the position in the other template is appended to the message.
+    """
+    (tmp_path / "conf.py").write_text(CONF_CONTENT)
+    (tmp_path / "helper.jinja").write_text(helper)
+    (tmp_path / "index.rst").write_text(f"Test\n====\n.. jinja::\n\n    {inline}\n")
+    result = run_sphinxbuild(tmp_path)
+    assert re.search(
+        r"index\.rst:3: WARNING: Error rendering jinja template: UndefinedError: "
+        r"undefined value[^\n]*\(helper\.jinja:4\)",
+        result.stderr,
+    ), result.stderr
