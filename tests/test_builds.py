@@ -3,6 +3,7 @@ from __future__ import annotations
 from io import StringIO
 from pathlib import Path
 import pickle
+import re
 import shutil
 import sys
 from textwrap import dedent
@@ -904,10 +905,12 @@ def test_render_error_file_position(tmp_path: Path):
         )
     )
     result = run_sphinxbuild(tmp_path)
-    assert (
-        "index.rst:3: WARNING: Error rendering jinja template: UndefinedError: "
-        "undefined value (template.jinja:2)" in result.stderr
-    )
+    # minijinja >=3 adds detail ("undefined value: `boom` is undefined"), so match loosely
+    assert re.search(
+        r"index\.rst:3: WARNING: Error rendering jinja template: UndefinedError: "
+        r"undefined value[^\n]*\(template\.jinja:2\)",
+        result.stderr,
+    ), result.stderr
 
 
 def test_render_error_debug_code_frame(tmp_path: Path):
