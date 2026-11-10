@@ -18,7 +18,8 @@ renders minijinja templates from data-only contexts, and can also render in ubCo
   Most templates render identically; the differences are listed under "Migration from Jinja2 to minijinja" below.
   `jinja2` is no longer a dependency of sphinx-jinja2 (it is still installed with Sphinx, which depends on it).
 - **Templates can no longer read underscore-prefixed attributes** (e.g. `{{ obj.__class__ }}`, `{{ obj._private }}`):
-  in minijinja's sandbox they are undefined, so the template fails to render, with a warning.
+  in minijinja's sandbox they are undefined, so the template fails to render, with a warning
+  (with the default strict undefined behaviour; with `lenient` they render empty).
   0.0.1 rendered with an unsandboxed `jinja2.Environment`, where such attributes lead to Python internals.
   Objects in a context (including `env`, the Sphinx build environment) still expose their public attributes and methods,
   so only put objects in a context that you trust a template with ([#10](https://github.com/sphinx-extensions2/sphinx-jinja2/pull/10)).
@@ -26,7 +27,8 @@ renders minijinja templates from data-only contexts, and can also render in ubCo
   and **minijinja >= 2.15** is a new dependency ([#10](https://github.com/sphinx-extensions2/sphinx-jinja2/pull/10)).
 - **Jinja2-only filters and decorators are unsupported**: filters such as `urlize`, `xmlattr`, `center` and `wordcount`
   are not built in to minijinja, and filters or tests using Jinja2's `@pass_context`, `@pass_environment`
-  or `@pass_eval_context` fail when the template renders, with a warning ([#10](https://github.com/sphinx-extensions2/sphinx-jinja2/pull/10)).
+  or `@pass_eval_context` fail when the template renders, with a warning
+  (or, if their extra parameters have defaults, run with the wrong arguments) ([#10](https://github.com/sphinx-extensions2/sphinx-jinja2/pull/10)).
 - **Jinja2-only `jinja2_env_kwargs` are ignored, with a warning** (e.g. `autoescape`, `undefined`, `loader`, `extensions`);
   `finalize` is passed on as minijinja's `finalizer` ([#10](https://github.com/sphinx-extensions2/sphinx-jinja2/pull/10)).
 
@@ -61,9 +63,11 @@ Most templates should render identically, however, note the following difference
   a `wordwrap` added via `jinja2_filters` replaces it.
 - Custom filters and tests receive values as plain arguments;
   Jinja2's `@pass_context`, `@pass_environment` and `@pass_eval_context` decorators
-  are not supported by minijinja (such filters fail when the template is rendered, with a warning).
+  are not supported by minijinja (such filters fail when the template is rendered, with a warning,
+  or, if their extra parameters have defaults, run with the wrong arguments).
 - Underscore-prefixed attributes (e.g. `__class__`, `_private`) are not accessible from templates;
-  they are undefined, so the template fails to render, with a warning.
+  they are undefined, so the template fails to render, with a warning
+  (with the default strict undefined behaviour; with `lenient` they render empty).
 - Python methods on objects (e.g. `{{ "a,b".split(",") }}`) continue to work,
   via minijinja's [Python compatibility mode](https://github.com/mitsuhiko/minijinja/tree/main/minijinja-py#python-methods-on-objects).
 - Templates referenced by `{% include %}` / `{% extends %}` remain restricted
@@ -118,6 +122,6 @@ Most templates should render identically, however, note the following difference
 
 **Full changelog**: [v0.0.1...v0.1.0](https://github.com/sphinx-extensions2/sphinx-jinja2/compare/v0.0.1...v0.1.0)
 
-## v0.0.1 (2024-01-26)
+## v0.0.1 (2024-02-01)
 
 Initial release.

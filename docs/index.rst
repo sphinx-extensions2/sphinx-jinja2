@@ -244,9 +244,11 @@ Most templates will render identically, but note the following differences:
   a ``wordwrap`` added via ``jinja2_filters`` replaces it.
 - Custom filters and tests receive values as plain arguments;
   Jinja2's ``@pass_context``, ``@pass_environment`` and ``@pass_eval_context`` decorators
-  are not supported by minijinja (such filters fail when the template is rendered, with a warning).
+  are not supported by minijinja (such filters fail when the template is rendered, with a warning,
+  or, if their extra parameters have defaults, run with the wrong arguments).
 - Underscore-prefixed attributes (e.g. ``__class__``, ``_private``) are not accessible from templates;
-  they are undefined, so the template fails to render, with a warning.
+  they are undefined, so the template fails to render, with a warning
+  (with the default strict undefined behaviour; with ``lenient`` they render empty).
   Objects in a context (including ``env``) still expose their public attributes and methods,
   so only put objects in a context that you trust a template with.
 - Python methods on objects (e.g. ``{{ "a,b".split(",") }}``) continue to work,
