@@ -8,6 +8,16 @@ sphinx-jinja2
 
     This is an adaption of `sphinx-jinja <https://github.com/tardyp/sphinx-jinja>`__, which appears to be unmaintained.
 
+.. seealso::
+
+    The ``ub-template`` directive in `sphinx-ub-directives <https://pypi.org/project/sphinx-ub-directives/>`__
+    renders minijinja templates with the same ``:file:``, ``:ctx:``, ``:debug:`` and ``:raw:`` options,
+    and with its configuration in ``ubproject.toml``, the same project also renders in ubCode.
+    It is stricter by design: contexts are data only (no ``env``, Python objects or functions),
+    there are no custom filters, tests or environment options, and template output may not contain headings.
+    The two extensions can be used side by side. sphinx-jinja2 remains maintained;
+    to switch, see `Migrating from sphinx-jinja2 <https://sphinx-ub-directives.readthedocs.io/en/latest/migrating.html>`__.
+
 Usage
 -----
 
@@ -235,6 +245,10 @@ Most templates will render identically, but note the following differences:
 - Custom filters and tests receive values as plain arguments;
   Jinja2's ``@pass_context``, ``@pass_environment`` and ``@pass_eval_context`` decorators
   are not supported by minijinja (such filters fail when the template is rendered, with a warning).
+- Underscore-prefixed attributes (e.g. ``__class__``, ``_private``) are not accessible from templates;
+  they are undefined, so the template fails to render, with a warning.
+  Objects in a context (including ``env``) still expose their public attributes and methods,
+  so only put objects in a context that you trust a template with.
 - Python methods on objects (e.g. ``{{ "a,b".split(",") }}``) continue to work,
   via minijinja's `Python compatibility mode <https://github.com/mitsuhiko/minijinja/tree/main/minijinja-py#python-methods-on-objects>`__.
 
