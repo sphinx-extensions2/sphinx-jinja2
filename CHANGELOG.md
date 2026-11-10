@@ -9,7 +9,8 @@ line-accurate error locations and typed warnings.
 It requires Python >= 3.11, Sphinx >= 7.2 and minijinja >= 2.15 (2.x and 3.x are both supported).
 
 See also [sphinx-ub-directives](https://sphinx-ub-directives.readthedocs.io), whose `ub-template` directive
-renders minijinja templates from data-only contexts, and can also render in ubCode; sphinx-jinja2 remains maintained
+renders minijinja templates from data-only contexts, is developed alongside sphinx-needs and also works in ubCode;
+new template features are developed there, and sphinx-jinja2 remains maintained with bug fixes and compatibility updates
 (see the note in the [documentation](https://sphinx-jinja2.readthedocs.io)).
 
 ### ‼️ Breaking changes

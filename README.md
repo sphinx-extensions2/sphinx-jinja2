@@ -11,7 +11,8 @@
 `:file:`, `:ctx:`, `:debug:` and `:raw:` options; with its configuration in `ubproject.toml`, the same project also renders in ubCode.
 It is stricter by design: contexts are data only (no `env`, Python objects or functions),
 there are no custom filters, tests or environment options, and template output may not contain headings.
-The two extensions can be used side by side. sphinx-jinja2 remains maintained;
+The two extensions can be used side by side. sphinx-jinja2 remains maintained with bug fixes and compatibility updates,
+while new template features are developed in sphinx-ub-directives, which is developed alongside sphinx-needs and also works in ubCode;
 to switch, see [Migrating from sphinx-jinja2](https://sphinx-ub-directives.readthedocs.io/en/latest/migrating.html).
 
 See [the documentation](https://sphinx-jinja2.readthedocs.io) for more information.
